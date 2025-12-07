@@ -9,7 +9,7 @@ from .check_gensim import is_dated_gensim_version
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
-from .parallel import parallel_generate_walks
+from .parallel import parallel_generate_walks, parallel_precompute_probabilities
 
 
 class Node2Vec:
@@ -76,74 +76,140 @@ class Node2Vec:
     def _precompute_probabilities(self):
         """
         Precomputes transition probabilities for each node.
+        Uses parallel processing when workers > 1.
         """
 
         d_graph = self.d_graph
 
-        nodes_generator = self.graph.nodes() if self.quiet \
-            else tqdm(self.graph.nodes(), desc='Computing transition probabilities')
+        # If only one worker, use sequential processing (faster for small graphs)
+        if self.workers == 1:
+            nodes_generator = self.graph.nodes() if self.quiet \
+                else tqdm(self.graph.nodes(), desc='Computing transition probabilities')
 
-        for source in nodes_generator:
+            for source in nodes_generator:
+                self._compute_probabilities_for_source(source)
+        else:
+            # Parallel processing for multiple workers
+            nodes_list = list(self.graph.nodes())
+            
+            if not self.quiet:
+                # Show progress bar for parallel processing
+                nodes_generator = tqdm(nodes_list, desc='Computing transition probabilities')
+            else:
+                nodes_generator = nodes_list
 
-            # Init probabilities dict for first travel
-            if self.PROBABILITIES_KEY not in d_graph[source]:
-                d_graph[source][self.PROBABILITIES_KEY] = dict()
-
-            for current_node in self.graph.neighbors(source):
-
-                # Init probabilities dict
-                if self.PROBABILITIES_KEY not in d_graph[current_node]:
-                    d_graph[current_node][self.PROBABILITIES_KEY] = dict()
-
-                unnormalized_weights = list()
-                d_neighbors = list()
-
-                # Calculate unnormalized weights
-                for destination in self.graph.neighbors(current_node):
-
-                    p = self.sampling_strategy[current_node].get(self.P_KEY,
-                                                                 self.p) if current_node in self.sampling_strategy else self.p
-                    q = self.sampling_strategy[current_node].get(self.Q_KEY,
-                                                                 self.q) if current_node in self.sampling_strategy else self.q
-
-                    try:
-                        if self.graph[current_node][destination].get(self.weight_key):
-                            weight = self.graph[current_node][destination].get(self.weight_key, 1)
-                        else: 
-                            ## Example : AtlasView({0: {'type': 1, 'weight':0.1}})- when we have edge weight
-                            edge = list(self.graph[current_node][destination])[-1]
-                            weight = self.graph[current_node][destination][edge].get(self.weight_key, 1)
-                            
-                    except:
-                        weight = 1 
+            # Process nodes in parallel
+            # Note: tqdm progress may not update smoothly in parallel mode, but will show completion
+            results = Parallel(n_jobs=self.workers, temp_folder=self.temp_folder, require=self.require)(
+                delayed(parallel_precompute_probabilities)(
+                    source,
+                    self.graph,
+                    self.p,
+                    self.q,
+                    self.weight_key,
+                    self.sampling_strategy,
+                    self.PROBABILITIES_KEY
+                ) for source in nodes_list
+            )
+            
+            # Close progress bar if used
+            if not self.quiet:
+                nodes_generator.close()
+            
+            # Merge results into d_graph
+            for source, result in zip(nodes_list, results):
+                # Init probabilities dict for first travel
+                if self.PROBABILITIES_KEY not in d_graph[source]:
+                    d_graph[source][self.PROBABILITIES_KEY] = dict()
+                
+                # Update probabilities for each current_node
+                for current_node in result:
+                    if current_node == 'first_travel' or current_node == 'neighbors':
+                        continue
                     
-                    if destination == source:  # Backwards probability
-                        ss_weight = weight * 1 / p
-                    elif destination in self.graph[source]:  # If the neighbor is connected to the source
-                        ss_weight = weight
-                    else:
-                        ss_weight = weight * 1 / q
+                    # Init probabilities dict
+                    if self.PROBABILITIES_KEY not in d_graph[current_node]:
+                        d_graph[current_node][self.PROBABILITIES_KEY] = dict()
+                    
+                    # Store the computed probabilities
+                    d_graph[current_node][self.PROBABILITIES_KEY][source] = result[current_node]
+                
+                # Store first_travel weights
+                d_graph[source][self.FIRST_TRAVEL_KEY] = result['first_travel']
+                
+                # Store neighbors
+                d_graph[source][self.NEIGHBORS_KEY] = result['neighbors']
 
-                    # Assign the unnormalized sampling strategy weight, normalize during random walk
-                    unnormalized_weights.append(ss_weight)
-                    d_neighbors.append(destination)
+    def _compute_probabilities_for_source(self, source):
+        """
+        Computes transition probabilities for a single source node.
+        Used for sequential processing.
+        """
+        d_graph = self.d_graph
 
-                # Normalize
-                unnormalized_weights = np.array(unnormalized_weights)
-                d_graph[current_node][self.PROBABILITIES_KEY][
-                    source] = unnormalized_weights / unnormalized_weights.sum()
+        # Init probabilities dict for first travel
+        if self.PROBABILITIES_KEY not in d_graph[source]:
+            d_graph[source][self.PROBABILITIES_KEY] = dict()
 
-            # Calculate first_travel weights for source
-            first_travel_weights = []
+        for current_node in self.graph.neighbors(source):
 
-            for destination in self.graph.neighbors(source):
-                first_travel_weights.append(self.graph[source][destination].get(self.weight_key, 1))
+            # Init probabilities dict
+            if self.PROBABILITIES_KEY not in d_graph[current_node]:
+                d_graph[current_node][self.PROBABILITIES_KEY] = dict()
 
-            first_travel_weights = np.array(first_travel_weights)
-            d_graph[source][self.FIRST_TRAVEL_KEY] = first_travel_weights / first_travel_weights.sum()
+            unnormalized_weights = list()
+            d_neighbors = list()
 
-            # Save neighbors
-            d_graph[source][self.NEIGHBORS_KEY] = list(self.graph.neighbors(source))
+            # Calculate unnormalized weights
+            for destination in self.graph.neighbors(current_node):
+
+                p = self.sampling_strategy[current_node].get(self.P_KEY,
+                                                             self.p) if current_node in self.sampling_strategy else self.p
+                q = self.sampling_strategy[current_node].get(self.Q_KEY,
+                                                             self.q) if current_node in self.sampling_strategy else self.q
+
+                try:
+                    if self.graph[current_node][destination].get(self.weight_key):
+                        weight = self.graph[current_node][destination].get(self.weight_key, 1)
+                    else: 
+                        ## Example : AtlasView({0: {'type': 1, 'weight':0.1}})- when we have edge weight
+                        edge = list(self.graph[current_node][destination])[-1]
+                        weight = self.graph[current_node][destination][edge].get(self.weight_key, 1)
+                        
+                except:
+                    weight = 1 
+                
+                if destination == source:  # Backwards probability
+                    ss_weight = weight * 1 / p
+                elif destination in self.graph[source]:  # If the neighbor is connected to the source
+                    ss_weight = weight
+                else:
+                    ss_weight = weight * 1 / q
+
+                # Assign the unnormalized sampling strategy weight, normalize during random walk
+                unnormalized_weights.append(ss_weight)
+                d_neighbors.append(destination)
+
+            # Normalize
+            unnormalized_weights = np.array(unnormalized_weights)
+            d_graph[current_node][self.PROBABILITIES_KEY][
+                source] = unnormalized_weights / unnormalized_weights.sum()
+
+        # Calculate first_travel weights for source
+        first_travel_weights = []
+
+        for destination in self.graph.neighbors(source):
+            try:
+                weight = self.graph[source][destination].get(self.weight_key, 1)
+            except:
+                weight = 1
+            first_travel_weights.append(weight)
+
+        first_travel_weights = np.array(first_travel_weights)
+        d_graph[source][self.FIRST_TRAVEL_KEY] = first_travel_weights / first_travel_weights.sum()
+
+        # Save neighbors
+        d_graph[source][self.NEIGHBORS_KEY] = list(self.graph.neighbors(source))
 
     def _generate_walks(self) -> list:
         """

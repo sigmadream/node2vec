@@ -1,5 +1,73 @@
 import random
 from tqdm import tqdm
+import numpy as np
+
+
+def parallel_precompute_probabilities(source, graph, p, q, weight_key, 
+                                      sampling_strategy, PROBABILITIES_KEY):
+    """
+    Precomputes transition probabilities for a single source node.
+    This function is designed to be called in parallel for multiple nodes.
+    
+    :param source: The source node to compute probabilities for
+    :param graph: The NetworkX graph
+    :param p: Return hyper parameter
+    :param q: Input parameter
+    :param weight_key: Key for edge weights
+    :param sampling_strategy: Node-specific sampling strategies
+    :param PROBABILITIES_KEY: Key for probabilities in d_graph (for reference)
+    :return: Dictionary with computed probabilities for this source node
+    """
+    result = {}
+    
+    for current_node in graph.neighbors(source):
+        unnormalized_weights = list()
+        
+        # Calculate unnormalized weights
+        for destination in graph.neighbors(current_node):
+            p_val = sampling_strategy[current_node].get('p', p) if current_node in sampling_strategy else p
+            q_val = sampling_strategy[current_node].get('q', q) if current_node in sampling_strategy else q
+            
+            try:
+                if graph[current_node][destination].get(weight_key):
+                    weight = graph[current_node][destination].get(weight_key, 1)
+                else:
+                    # Example: AtlasView({0: {'type': 1, 'weight':0.1}}) - when we have edge weight
+                    edge = list(graph[current_node][destination])[-1]
+                    weight = graph[current_node][destination][edge].get(weight_key, 1)
+            except:
+                weight = 1
+            
+            if destination == source:  # Backwards probability
+                ss_weight = weight * 1 / p_val
+            elif destination in graph[source]:  # If the neighbor is connected to the source
+                ss_weight = weight
+            else:
+                ss_weight = weight * 1 / q_val
+            
+            # Assign the unnormalized sampling strategy weight, normalize during random walk
+            unnormalized_weights.append(ss_weight)
+        
+        # Normalize
+        unnormalized_weights = np.array(unnormalized_weights)
+        result[current_node] = unnormalized_weights / unnormalized_weights.sum()
+    
+    # Calculate first_travel weights for source
+    first_travel_weights = []
+    for destination in graph.neighbors(source):
+        try:
+            weight = graph[source][destination].get(weight_key, 1)
+        except:
+            weight = 1
+        first_travel_weights.append(weight)
+    
+    first_travel_weights = np.array(first_travel_weights)
+    result['first_travel'] = first_travel_weights / first_travel_weights.sum()
+    
+    # Save neighbors
+    result['neighbors'] = list(graph.neighbors(source))
+    
+    return result
 
 
 def parallel_generate_walks(d_graph: dict, global_walk_length: int, num_walks: int, cpu_num: int,
