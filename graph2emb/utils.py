@@ -66,17 +66,14 @@ class WeisfeilerLehmanHashing(object):
                         self.use_node_attribute,
                         len(features),
                         self.graph.number_of_nodes(),
-                        missing_nodes
+                        missing_nodes,
                     )
                 )
             # If so, we assign the feature set.
             self.features = features
         else:
-            self.features = {
-                node: self.graph.degree(node) for node in self.graph.nodes()
-            }
-        self.extracted_features = {k: [str(v)]
-                                   for k, v in self.features.items()}
+            self.features = {node: self.graph.degree(node) for node in self.graph.nodes()}
+        self.extracted_features = {k: [str(v)] for k, v in self.features.items()}
 
     def _erase_base_features(self):
         """
@@ -96,15 +93,12 @@ class WeisfeilerLehmanHashing(object):
         for node in self.graph.nodes():
             nebs = self.graph.neighbors(node)
             degs = [self.features[neb] for neb in nebs]
-            features = [str(self.features[node])] + \
-                sorted([str(deg) for deg in degs])
+            features = [str(self.features[node])] + sorted([str(deg) for deg in degs])
             features = "_".join(features)
             hash_object = hashlib.md5(features.encode())
             hashing = hash_object.hexdigest()
             new_features[node] = hashing
-        self.extracted_features = {
-            k: self.extracted_features[k] + [v] for k, v in new_features.items()
-        }
+        self.extracted_features = {k: self.extracted_features[k] + [v] for k, v in new_features.items()}
         return new_features
 
     def _do_recursions(self):
@@ -126,9 +120,6 @@ class WeisfeilerLehmanHashing(object):
         """
         Return the graph level features.
         """
-        return [
-            feature
-            for node, features in self.extracted_features.items()
-            for feature in features
-        ]
+        return [feature for node, features in self.extracted_features.items() for feature in features]
+
 

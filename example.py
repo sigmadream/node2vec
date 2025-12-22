@@ -1,5 +1,5 @@
 import networkx as nx
-from node2vec import Node2Vec
+from graph2emb import Node2Vec
 
 # FILES
 EMBEDDING_FILENAME = './embeddings.emb'

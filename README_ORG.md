@@ -15,7 +15,7 @@ Python3 implementation of the node2vec algorithm Aditya Grover, Jure Leskovec an
 ## Usage
 ```python
 import networkx as nx
-from node2vec import Node2Vec
+from graph2emb import Node2Vec
 
 # Create a graph
 graph = nx.fast_gnp_random_graph(n=100, p=0.5)
@@ -36,7 +36,7 @@ model.wv.save_word2vec_format(EMBEDDING_FILENAME)
 model.save(EMBEDDING_MODEL_FILENAME)
 
 # Embed edges using Hadamard method
-from node2vec.edges import HadamardEmbedder
+from graph2emb.edges import HadamardEmbedder
 
 edges_embs = HadamardEmbedder(keyed_vectors=model.wv)
 

@@ -12,18 +12,30 @@ from .word2vec import Word2Vec
 
 
 class Node2Vec:
-    FIRST_TRAVEL_KEY = 'first_travel_key'
-    PROBABILITIES_KEY = 'probabilities'
-    NEIGHBORS_KEY = 'neighbors'
-    WEIGHT_KEY = 'weight'
-    NUM_WALKS_KEY = 'num_walks'
-    WALK_LENGTH_KEY = 'walk_length'
-    P_KEY = 'p'
-    Q_KEY = 'q'
+    FIRST_TRAVEL_KEY = "first_travel_key"
+    PROBABILITIES_KEY = "probabilities"
+    NEIGHBORS_KEY = "neighbors"
+    WEIGHT_KEY = "weight"
+    NUM_WALKS_KEY = "num_walks"
+    WALK_LENGTH_KEY = "walk_length"
+    P_KEY = "p"
+    Q_KEY = "q"
 
-    def __init__(self, graph: nx.Graph, dimensions: int = 128, walk_length: int = 80, num_walks: int = 10, p: float = 1,
-                 q: float = 1, weight_key: str = 'weight', workers: int = 1, sampling_strategy: dict = None,
-                 quiet: bool = False, temp_folder: str = None, seed: int = None):
+    def __init__(
+        self,
+        graph: nx.Graph,
+        dimensions: int = 128,
+        walk_length: int = 80,
+        num_walks: int = 10,
+        p: float = 1,
+        q: float = 1,
+        weight_key: str = "weight",
+        workers: int = 1,
+        sampling_strategy: dict = None,
+        quiet: bool = False,
+        temp_folder: str = None,
+        seed: int = None,
+    ):
         """
         Initiates the Node2Vec object, precomputes walking probabilities and generates the walks.
 
@@ -82,18 +94,17 @@ class Node2Vec:
 
         # If only one worker, use sequential processing (faster for small graphs)
         if self.workers == 1:
-            nodes_generator = self.graph.nodes() if self.quiet \
-                else tqdm(self.graph.nodes(), desc='Computing transition probabilities')
+            nodes_generator = self.graph.nodes() if self.quiet else tqdm(self.graph.nodes(), desc="Computing transition probabilities")
 
             for source in nodes_generator:
                 self._compute_probabilities_for_source(source)
         else:
             # Parallel processing for multiple workers
             nodes_list = list(self.graph.nodes())
-            
+
             if not self.quiet:
                 # Show progress bar for parallel processing
-                nodes_generator = tqdm(nodes_list, desc='Computing transition probabilities')
+                nodes_generator = tqdm(nodes_list, desc="Computing transition probabilities")
             else:
                 nodes_generator = nodes_list
 
@@ -107,37 +118,38 @@ class Node2Vec:
                     self.q,
                     self.weight_key,
                     self.sampling_strategy,
-                    self.PROBABILITIES_KEY
-                ) for source in nodes_list
+                    self.PROBABILITIES_KEY,
+                )
+                for source in nodes_list
             )
-            
+
             # Close progress bar if used
             if not self.quiet:
                 nodes_generator.close()
-            
+
             # Merge results into d_graph
             for source, result in zip(nodes_list, results):
                 # Init probabilities dict for first travel
                 if self.PROBABILITIES_KEY not in d_graph[source]:
                     d_graph[source][self.PROBABILITIES_KEY] = dict()
-                
+
                 # Update probabilities for each current_node
                 for current_node in result:
-                    if current_node == 'first_travel' or current_node == 'neighbors':
+                    if current_node == "first_travel" or current_node == "neighbors":
                         continue
-                    
+
                     # Init probabilities dict
                     if self.PROBABILITIES_KEY not in d_graph[current_node]:
                         d_graph[current_node][self.PROBABILITIES_KEY] = dict()
-                    
+
                     # Store the computed probabilities
                     d_graph[current_node][self.PROBABILITIES_KEY][source] = result[current_node]
-                
+
                 # Store first_travel weights
-                d_graph[source][self.FIRST_TRAVEL_KEY] = result['first_travel']
-                
+                d_graph[source][self.FIRST_TRAVEL_KEY] = result["first_travel"]
+
                 # Store neighbors
-                d_graph[source][self.NEIGHBORS_KEY] = result['neighbors']
+                d_graph[source][self.NEIGHBORS_KEY] = result["neighbors"]
 
     def _compute_probabilities_for_source(self, source):
         """
@@ -162,22 +174,20 @@ class Node2Vec:
             # Calculate unnormalized weights
             for destination in self.graph.neighbors(current_node):
 
-                p = self.sampling_strategy[current_node].get(self.P_KEY,
-                                                             self.p) if current_node in self.sampling_strategy else self.p
-                q = self.sampling_strategy[current_node].get(self.Q_KEY,
-                                                             self.q) if current_node in self.sampling_strategy else self.q
+                p = self.sampling_strategy[current_node].get(self.P_KEY, self.p) if current_node in self.sampling_strategy else self.p
+                q = self.sampling_strategy[current_node].get(self.Q_KEY, self.q) if current_node in self.sampling_strategy else self.q
 
                 try:
                     if self.graph[current_node][destination].get(self.weight_key):
                         weight = self.graph[current_node][destination].get(self.weight_key, 1)
-                    else: 
+                    else:
                         ## Example : AtlasView({0: {'type': 1, 'weight':0.1}})- when we have edge weight
                         edge = list(self.graph[current_node][destination])[-1]
                         weight = self.graph[current_node][destination][edge].get(self.weight_key, 1)
-                        
+
                 except:
-                    weight = 1 
-                
+                    weight = 1
+
                 if destination == source:  # Backwards probability
                     ss_weight = weight * 1 / p
                 elif destination in self.graph[source]:  # If the neighbor is connected to the source
@@ -191,8 +201,7 @@ class Node2Vec:
 
             # Normalize
             unnormalized_weights = np.array(unnormalized_weights)
-            d_graph[current_node][self.PROBABILITIES_KEY][
-                source] = unnormalized_weights / unnormalized_weights.sum()
+            d_graph[current_node][self.PROBABILITIES_KEY][source] = unnormalized_weights / unnormalized_weights.sum()
 
         # Calculate first_travel weights for source
         first_travel_weights = []
@@ -222,19 +231,21 @@ class Node2Vec:
         num_walks_lists = np.array_split(range(self.num_walks), self.workers)
 
         walk_results = Parallel(n_jobs=self.workers, temp_folder=self.temp_folder, require=self.require)(
-            delayed(parallel_generate_walks)(self.d_graph,
-                                             self.walk_length,
-                                             len(num_walks),
-                                             idx,
-                                             self.sampling_strategy,
-                                             self.NUM_WALKS_KEY,
-                                             self.WALK_LENGTH_KEY,
-                                             self.NEIGHBORS_KEY,
-                                             self.PROBABILITIES_KEY,
-                                             self.FIRST_TRAVEL_KEY,
-                                             self.quiet) for
-            idx, num_walks
-            in enumerate(num_walks_lists, 1))
+            delayed(parallel_generate_walks)(
+                self.d_graph,
+                self.walk_length,
+                len(num_walks),
+                idx,
+                self.sampling_strategy,
+                self.NUM_WALKS_KEY,
+                self.WALK_LENGTH_KEY,
+                self.NEIGHBORS_KEY,
+                self.PROBABILITIES_KEY,
+                self.FIRST_TRAVEL_KEY,
+                self.quiet,
+            )
+            for idx, num_walks in enumerate(num_walks_lists, 1)
+        )
 
         walks = flatten(walk_results)
 
@@ -249,13 +260,15 @@ class Node2Vec:
         :return: A Word2Vec model
         """
 
-        if 'workers' not in skip_gram_params:
-            skip_gram_params['workers'] = self.workers
+        if "workers" not in skip_gram_params:
+            skip_gram_params["workers"] = self.workers
 
-        if 'vector_size' not in skip_gram_params:
-            skip_gram_params['vector_size'] = self.dimensions
+        if "vector_size" not in skip_gram_params:
+            skip_gram_params["vector_size"] = self.dimensions
 
-        if 'sg' not in skip_gram_params:
-            skip_gram_params['sg'] = 1
+        if "sg" not in skip_gram_params:
+            skip_gram_params["sg"] = 1
 
         return Word2Vec(self.walks, **skip_gram_params)
+
+

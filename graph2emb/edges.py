@@ -6,8 +6,9 @@ import numpy as np
 from .keyedvectors import KeyedVectors
 from tqdm import tqdm
 
+
 class EdgeEmbedder(ABC):
-    INDEX_MAPPING_KEY = 'index_to_key'
+    INDEX_MAPPING_KEY = "index_to_key"
 
     def __init__(self, keyed_vectors: KeyedVectors, quiet: bool = False):
         """
@@ -28,13 +29,13 @@ class EdgeEmbedder(ABC):
 
     def __getitem__(self, edge) -> np.ndarray:
         if not isinstance(edge, tuple) or not len(edge) == 2:
-            raise ValueError('edge must be a tuple of two nodes')
+            raise ValueError("edge must be a tuple of two nodes")
 
         if edge[0] not in getattr(self.kv, self.INDEX_MAPPING_KEY):
-            raise KeyError('node {} does not exist in given KeyedVectors'.format(edge[0]))
+            raise KeyError("node {} does not exist in given KeyedVectors".format(edge[0]))
 
         if edge[1] not in getattr(self.kv, self.INDEX_MAPPING_KEY):
-            raise KeyError('node {} does not exist in given KeyedVectors'.format(edge[1]))
+            raise KeyError("node {} does not exist in given KeyedVectors".format(edge[1]))
 
         return self._embed(edge)
 
@@ -48,10 +49,11 @@ class EdgeEmbedder(ABC):
 
         if not self.quiet:
             vocab_size = len(getattr(self.kv, self.INDEX_MAPPING_KEY))
-            total_size = reduce(lambda x, y: x * y, range(1, vocab_size + 2)) / \
-                         (2 * reduce(lambda x, y: x * y, range(1, vocab_size)))
+            total_size = reduce(lambda x, y: x * y, range(1, vocab_size + 2)) / (
+                2 * reduce(lambda x, y: x * y, range(1, vocab_size))
+            )
 
-            edge_generator = tqdm(edge_generator, desc='Generating edge features', total=total_size)
+            edge_generator = tqdm(edge_generator, desc="Generating edge features", total=total_size)
 
         # Generate features
         tokens = []
@@ -65,9 +67,7 @@ class EdgeEmbedder(ABC):
 
         # Build KV instance
         edge_kv = KeyedVectors(vector_size=self.kv.vector_size)
-        edge_kv.add_vectors(
-            keys=tokens,
-            weights=features)
+        edge_kv.add_vectors(keys=tokens, weights=features)
 
         return edge_kv
 
@@ -106,3 +106,5 @@ class WeightedL2Embedder(EdgeEmbedder):
 
     def _embed(self, edge: tuple):
         return (self.kv[edge[0]] - self.kv[edge[1]]) ** 2
+
+

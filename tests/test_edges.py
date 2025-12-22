@@ -4,8 +4,8 @@ Tests for edge embedding functionality.
 import pytest
 import networkx as nx
 import numpy as np
-from node2vec import Node2Vec
-from node2vec.edges import (
+from graph2emb import Node2Vec
+from graph2emb.edges import (
     EdgeEmbedder,
     AverageEmbedder,
     HadamardEmbedder,
@@ -17,12 +17,11 @@ from node2vec.edges import (
 class TestEdgeEmbedders:
     """Test cases for edge embedders."""
     
-    @pytest.fixture
-    def sample_model(self):
-        """Create a sample Node2Vec model for testing."""
-        graph = nx.fast_gnp_random_graph(n=20, p=0.4, seed=42)
-        node2vec = Node2Vec(graph, dimensions=16, walk_length=5, num_walks=3, workers=1, quiet=True)
-        model = node2vec.fit(window=5, min_count=1, batch_words=4)
+    @pytest.fixture(scope="module")
+    def sample_model(self, small_graph, default_node2vec_params):
+        """Create a sample Node2Vec model for testing (built once per module)."""
+        node2vec = Node2Vec(small_graph, **default_node2vec_params)
+        model = node2vec.fit(window=3, min_count=1, epochs=1)
         return model
     
     def test_average_embedder(self, sample_model):
@@ -36,7 +35,7 @@ class TestEdgeEmbedders:
         embedding = embedder[edge]
         
         assert isinstance(embedding, np.ndarray)
-        assert len(embedding) == 16
+        assert len(embedding) == sample_model.wv.vector_size
         assert embedding.dtype in [np.float32, np.float64]
         
         # Average should be (node1 + node2) / 2
@@ -53,7 +52,7 @@ class TestEdgeEmbedders:
         embedding = embedder[edge]
         
         assert isinstance(embedding, np.ndarray)
-        assert len(embedding) == 16
+        assert len(embedding) == sample_model.wv.vector_size
         
         # Hadamard should be node1 * node2
         expected = sample_model.wv[nodes[0]] * sample_model.wv[nodes[1]]
@@ -69,7 +68,7 @@ class TestEdgeEmbedders:
         embedding = embedder[edge]
         
         assert isinstance(embedding, np.ndarray)
-        assert len(embedding) == 16
+        assert len(embedding) == sample_model.wv.vector_size
         
         # L1 should be |node1 - node2|
         expected = np.abs(sample_model.wv[nodes[0]] - sample_model.wv[nodes[1]])
@@ -86,7 +85,7 @@ class TestEdgeEmbedders:
         embedding = embedder[edge]
         
         assert isinstance(embedding, np.ndarray)
-        assert len(embedding) == 16
+        assert len(embedding) == sample_model.wv.vector_size
         
         # L2 should be (node1 - node2)^2
         expected = (sample_model.wv[nodes[0]] - sample_model.wv[nodes[1]]) ** 2
@@ -115,7 +114,7 @@ class TestEdgeEmbedders:
         edge_kv = embedder.as_keyed_vectors()
         
         assert edge_kv is not None
-        assert edge_kv.vector_size == 16
+        assert edge_kv.vector_size == sample_model.wv.vector_size
         
         # Check that edges are stored as sorted tuples
         nodes = list(sample_model.wv.index_to_key)
@@ -138,7 +137,7 @@ class TestEdgeEmbedders:
         for embedder in embedders:
             embedding = embedder[edge]
             assert isinstance(embedding, np.ndarray)
-            assert len(embedding) == 16
+            assert len(embedding) == sample_model.wv.vector_size
     
     def test_edge_embedder_with_different_node_types(self, sample_model):
         """Test edge embedder with string node names."""

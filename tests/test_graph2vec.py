@@ -4,8 +4,8 @@ Tests for Graph2Vec basic functionality.
 import pytest
 import networkx as nx
 import numpy as np
-from node2vec import Graph2Vec
-from node2vec.utils import WeisfeilerLehmanHashing
+from graph2emb import Graph2Vec
+from graph2emb.utils import WeisfeilerLehmanHashing
 
 
 class TestGraph2Vec:
@@ -120,33 +120,32 @@ class TestGraph2Vec:
         for node in graph.nodes():
             assert len(node_features[node]) == 2  # wl_iterations
     
-    def test_fit_single_graph(self):
+    def test_fit_single_graph(self, small_graph):
         """Test fitting Graph2Vec with a single graph."""
-        graph = nx.fast_gnp_random_graph(n=10, p=0.5, seed=42)
-        graph2vec = Graph2Vec(dimensions=32, workers=1, seed=42, min_count=1, epochs=2)
-        graph2vec.fit([graph])
+        graph2vec = Graph2Vec(dimensions=16, workers=1, seed=42, min_count=1, epochs=1)
+        graph2vec.fit([small_graph])
         
         embedding = graph2vec.get_embedding()
         
         assert isinstance(embedding, np.ndarray)
-        assert embedding.shape == (1, 32)
+        assert embedding.shape == (1, 16)
         assert graph2vec.model is not None
     
     def test_fit_multiple_graphs(self):
         """Test fitting Graph2Vec with multiple graphs."""
         graphs = [
-            nx.fast_gnp_random_graph(n=8, p=0.5, seed=42),
-            nx.fast_gnp_random_graph(n=10, p=0.5, seed=43),
-            nx.fast_gnp_random_graph(n=8, p=0.5, seed=44),
+            nx.fast_gnp_random_graph(n=6, p=0.5, seed=42),
+            nx.fast_gnp_random_graph(n=7, p=0.5, seed=43),
+            nx.fast_gnp_random_graph(n=6, p=0.5, seed=44),
         ]
         
-        graph2vec = Graph2Vec(dimensions=32, workers=1, seed=42, min_count=1, epochs=2)
+        graph2vec = Graph2Vec(dimensions=16, workers=1, seed=42, min_count=1, epochs=1)
         graph2vec.fit(graphs)
         
         embedding = graph2vec.get_embedding()
         
         assert isinstance(embedding, np.ndarray)
-        assert embedding.shape == (3, 32)
+        assert embedding.shape == (3, 16)
         assert len(embedding) == len(graphs)
     
     def test_get_embedding_before_fit(self):
@@ -168,42 +167,41 @@ class TestGraph2Vec:
         """Test inferring embeddings for new graphs."""
         # Train on some graphs
         train_graphs = [
-            nx.fast_gnp_random_graph(n=10, p=0.5, seed=42),
-            nx.fast_gnp_random_graph(n=10, p=0.5, seed=43),
+            nx.fast_gnp_random_graph(n=7, p=0.5, seed=42),
+            nx.fast_gnp_random_graph(n=7, p=0.5, seed=43),
         ]
         
-        graph2vec = Graph2Vec(dimensions=32, workers=1, seed=42, min_count=1, epochs=2)
+        graph2vec = Graph2Vec(dimensions=16, workers=1, seed=42, min_count=1, epochs=1)
         graph2vec.fit(train_graphs)
         
         # Infer on new graphs
         test_graphs = [
-            nx.fast_gnp_random_graph(n=8, p=0.5, seed=45),
+            nx.fast_gnp_random_graph(n=6, p=0.5, seed=45),
         ]
         
         inferred_embedding = graph2vec.infer(test_graphs)
         
         assert isinstance(inferred_embedding, np.ndarray)
-        assert inferred_embedding.shape == (1, 32)
+        assert inferred_embedding.shape == (1, 16)
     
-    def test_different_wl_iterations(self):
+    @pytest.mark.parametrize("wl_iter", [1, 2])
+    def test_different_wl_iterations(self, wl_iter):
         """Test Graph2Vec with different wl_iterations values."""
         graphs = [
-            nx.fast_gnp_random_graph(n=10, p=0.5, seed=42),
-            nx.fast_gnp_random_graph(n=10, p=0.5, seed=43),
+            nx.fast_gnp_random_graph(n=7, p=0.5, seed=42),
+            nx.fast_gnp_random_graph(n=7, p=0.5, seed=43),
         ]
-        
-        for wl_iter in [1, 2]:
-            graph2vec = Graph2Vec(
-                wl_iterations=wl_iter,
-                dimensions=32,
-                workers=1,
-                seed=42,
-                min_count=1,
-                epochs=2
-            )
-            graph2vec.fit(graphs)
-            embedding = graph2vec.get_embedding()
-            assert embedding.shape == (2, 32)
+        graph2vec = Graph2Vec(
+            wl_iterations=wl_iter,
+            dimensions=16,
+            workers=1,
+            seed=42,
+            min_count=1,
+            epochs=1,
+        )
+        graph2vec.fit(graphs)
+        embedding = graph2vec.get_embedding()
+        assert embedding.shape == (2, 16)
     
     def test_use_node_attribute(self):
         """Test Graph2Vec with use_node_attribute parameter."""
@@ -217,29 +215,29 @@ class TestGraph2Vec:
         
         graph2vec = Graph2Vec(
             use_node_attribute='attr',
-            dimensions=32,
+            dimensions=16,
             workers=1,
             seed=42,
             min_count=1,
-            epochs=2
+            epochs=1
         )
         graph2vec.fit(graphs)
         
         embedding = graph2vec.get_embedding()
-        assert embedding.shape == (2, 32)
+        assert embedding.shape == (2, 16)
     
     def test_seed_reproducibility(self):
         """Test that seed produces reproducible results."""
         graphs = [
-            nx.fast_gnp_random_graph(n=8, p=0.5, seed=42),
-            nx.fast_gnp_random_graph(n=8, p=0.5, seed=43),
+            nx.fast_gnp_random_graph(n=6, p=0.5, seed=42),
+            nx.fast_gnp_random_graph(n=6, p=0.5, seed=43),
         ]
         
-        graph2vec1 = Graph2Vec(dimensions=32, workers=1, seed=123, min_count=1, epochs=3)
+        graph2vec1 = Graph2Vec(dimensions=16, workers=1, seed=123, min_count=1, epochs=1)
         graph2vec1.fit(graphs)
         embedding1 = graph2vec1.get_embedding()
         
-        graph2vec2 = Graph2Vec(dimensions=32, workers=1, seed=123, min_count=1, epochs=3)
+        graph2vec2 = Graph2Vec(dimensions=16, workers=1, seed=123, min_count=1, epochs=1)
         graph2vec2.fit(graphs)
         embedding2 = graph2vec2.get_embedding()
         
@@ -248,31 +246,31 @@ class TestGraph2Vec:
     def test_erase_base_features(self):
         """Test Graph2Vec with erase_base_features parameter."""
         graphs = [
-            nx.fast_gnp_random_graph(n=10, p=0.5, seed=42),
-            nx.fast_gnp_random_graph(n=10, p=0.5, seed=43),
+            nx.fast_gnp_random_graph(n=7, p=0.5, seed=42),
+            nx.fast_gnp_random_graph(n=7, p=0.5, seed=43),
         ]
         
         graph2vec = Graph2Vec(
             erase_base_features=True,
-            dimensions=32,
+            dimensions=16,
             workers=1,
             seed=42,
             min_count=1,
-            epochs=2
+            epochs=1
         )
         graph2vec.fit(graphs)
         
         embedding = graph2vec.get_embedding()
-        assert embedding.shape == (2, 32)
+        assert embedding.shape == (2, 16)
     
     def test_empty_graph_list(self):
         """Test Graph2Vec with empty graph list."""
-        graph2vec = Graph2Vec(dimensions=32, workers=1, seed=42)
+        graph2vec = Graph2Vec(dimensions=16, workers=1, seed=42)
         graph2vec.fit([])
         
         embedding = graph2vec.get_embedding()
         assert isinstance(embedding, np.ndarray)
-        assert embedding.shape == (0, 32)
+        assert embedding.shape == (0, 16)
     
     def test_single_node_graph(self):
         """Test Graph2Vec with single node graphs."""
@@ -285,7 +283,7 @@ class TestGraph2Vec:
         graphs[1].add_node(1)
         
         graph2vec = Graph2Vec(
-            dimensions=32,
+            dimensions=16,
             min_count=1,  # Lower min_count for small graphs
             workers=1,
             seed=42
@@ -293,27 +291,27 @@ class TestGraph2Vec:
         graph2vec.fit(graphs)
         
         embedding = graph2vec.get_embedding()
-        assert embedding.shape == (2, 32)
+        assert embedding.shape == (2, 16)
     
     def test_mixed_size_graphs(self):
         """Test Graph2Vec with graphs of different sizes."""
         graphs = [
             nx.fast_gnp_random_graph(n=5, p=0.5, seed=42),
-            nx.fast_gnp_random_graph(n=10, p=0.5, seed=43),
-            nx.fast_gnp_random_graph(n=8, p=0.6, seed=44),
+            nx.fast_gnp_random_graph(n=7, p=0.5, seed=43),
+            nx.fast_gnp_random_graph(n=6, p=0.6, seed=44),
         ]
         
         graph2vec = Graph2Vec(
-            dimensions=32,
+            dimensions=16,
             min_count=1,
             workers=1,
             seed=42,
-            epochs=2
+            epochs=1
         )
         graph2vec.fit(graphs)
         
         embedding = graph2vec.get_embedding()
-        assert embedding.shape == (3, 32)
+        assert embedding.shape == (3, 16)
     
     def test_string_node_names(self):
         """Test Graph2Vec with string node names."""
@@ -324,30 +322,30 @@ class TestGraph2Vec:
             graphs.append(graph)
         
         graph2vec = Graph2Vec(
-            dimensions=32,
+            dimensions=16,
             min_count=1,
             workers=1,
             seed=42,
-            epochs=2
+            epochs=1
         )
         graph2vec.fit(graphs)
         
         embedding = graph2vec.get_embedding()
-        assert embedding.shape == (2, 32)
+        assert embedding.shape == (2, 16)
     
     def test_custom_parameters(self):
         """Test Graph2Vec with various custom parameters."""
         graphs = [
-            nx.fast_gnp_random_graph(n=10, p=0.5, seed=42),
-            nx.fast_gnp_random_graph(n=10, p=0.5, seed=43),
+            nx.fast_gnp_random_graph(n=7, p=0.5, seed=42),
+            nx.fast_gnp_random_graph(n=7, p=0.5, seed=43),
         ]
         
         graph2vec = Graph2Vec(
             wl_iterations=2,
-            dimensions=32,
+            dimensions=16,
             workers=1,
             down_sampling=0.001,
-            epochs=2,
+            epochs=1,
             learning_rate=0.01,
             min_count=1,
             seed=100,
@@ -356,8 +354,8 @@ class TestGraph2Vec:
         graph2vec.fit(graphs)
         
         embedding = graph2vec.get_embedding()
-        assert embedding.shape == (2, 32)
+        assert embedding.shape == (2, 16)
         assert graph2vec.wl_iterations == 2
-        assert graph2vec.dimensions == 32
-        assert graph2vec.epochs == 2
+        assert graph2vec.dimensions == 16
+        assert graph2vec.epochs == 1
 

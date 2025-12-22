@@ -3,12 +3,11 @@ from tqdm import tqdm
 import numpy as np
 
 
-def parallel_precompute_probabilities(source, graph, p, q, weight_key, 
-                                      sampling_strategy, PROBABILITIES_KEY):
+def parallel_precompute_probabilities(source, graph, p, q, weight_key, sampling_strategy, PROBABILITIES_KEY):
     """
     Precomputes transition probabilities for a single source node.
     This function is designed to be called in parallel for multiple nodes.
-    
+
     :param source: The source node to compute probabilities for
     :param graph: The NetworkX graph
     :param p: Return hyper parameter
@@ -19,15 +18,15 @@ def parallel_precompute_probabilities(source, graph, p, q, weight_key,
     :return: Dictionary with computed probabilities for this source node
     """
     result = {}
-    
+
     for current_node in graph.neighbors(source):
         unnormalized_weights = list()
-        
+
         # Calculate unnormalized weights
         for destination in graph.neighbors(current_node):
-            p_val = sampling_strategy[current_node].get('p', p) if current_node in sampling_strategy else p
-            q_val = sampling_strategy[current_node].get('q', q) if current_node in sampling_strategy else q
-            
+            p_val = sampling_strategy[current_node].get("p", p) if current_node in sampling_strategy else p
+            q_val = sampling_strategy[current_node].get("q", q) if current_node in sampling_strategy else q
+
             try:
                 if graph[current_node][destination].get(weight_key):
                     weight = graph[current_node][destination].get(weight_key, 1)
@@ -37,21 +36,21 @@ def parallel_precompute_probabilities(source, graph, p, q, weight_key,
                     weight = graph[current_node][destination][edge].get(weight_key, 1)
             except:
                 weight = 1
-            
+
             if destination == source:  # Backwards probability
                 ss_weight = weight * 1 / p_val
             elif destination in graph[source]:  # If the neighbor is connected to the source
                 ss_weight = weight
             else:
                 ss_weight = weight * 1 / q_val
-            
+
             # Assign the unnormalized sampling strategy weight, normalize during random walk
             unnormalized_weights.append(ss_weight)
-        
+
         # Normalize
         unnormalized_weights = np.array(unnormalized_weights)
         result[current_node] = unnormalized_weights / unnormalized_weights.sum()
-    
+
     # Calculate first_travel weights for source
     first_travel_weights = []
     for destination in graph.neighbors(source):
@@ -60,20 +59,29 @@ def parallel_precompute_probabilities(source, graph, p, q, weight_key,
         except:
             weight = 1
         first_travel_weights.append(weight)
-    
+
     first_travel_weights = np.array(first_travel_weights)
-    result['first_travel'] = first_travel_weights / first_travel_weights.sum()
-    
+    result["first_travel"] = first_travel_weights / first_travel_weights.sum()
+
     # Save neighbors
-    result['neighbors'] = list(graph.neighbors(source))
-    
+    result["neighbors"] = list(graph.neighbors(source))
+
     return result
 
 
-def parallel_generate_walks(d_graph: dict, global_walk_length: int, num_walks: int, cpu_num: int,
-                            sampling_strategy: dict = None, num_walks_key: str = None, walk_length_key: str = None,
-                            neighbors_key: str = None, probabilities_key: str = None, first_travel_key: str = None,
-                            quiet: bool = False) -> list:
+def parallel_generate_walks(
+    d_graph: dict,
+    global_walk_length: int,
+    num_walks: int,
+    cpu_num: int,
+    sampling_strategy: dict = None,
+    num_walks_key: str = None,
+    walk_length_key: str = None,
+    neighbors_key: str = None,
+    probabilities_key: str = None,
+    first_travel_key: str = None,
+    quiet: bool = False,
+) -> list:
     """
     Generates the random walks which will be used as the skip-gram input.
 
@@ -83,7 +91,7 @@ def parallel_generate_walks(d_graph: dict, global_walk_length: int, num_walks: i
     walks = list()
 
     if not quiet:
-        pbar = tqdm(total=num_walks, desc='Generating walks (CPU: {})'.format(cpu_num))
+        pbar = tqdm(total=num_walks, desc="Generating walks (CPU: {})".format(cpu_num))
 
     for n_walk in range(num_walks):
 
@@ -99,9 +107,11 @@ def parallel_generate_walks(d_graph: dict, global_walk_length: int, num_walks: i
         for source in shuffled_nodes:
 
             # Skip nodes with specific num_walks
-            if source in sampling_strategy and \
-                    num_walks_key in sampling_strategy[source] and \
-                    sampling_strategy[source][num_walks_key] <= n_walk:
+            if (
+                source in sampling_strategy
+                and num_walks_key in sampling_strategy[source]
+                and sampling_strategy[source][num_walks_key] <= n_walk
+            ):
                 continue
 
             # Start walk
@@ -139,3 +149,5 @@ def parallel_generate_walks(d_graph: dict, global_walk_length: int, num_walks: i
         pbar.close()
 
     return walks
+
+

@@ -70,13 +70,13 @@ class Graph2Vec:
             * **graphs** *(List of NetworkX graphs)* - The graphs to be embedded.
         """
         self._set_seed()
-        
+
         # Handle empty graph list
         if len(graphs) == 0:
             self.model = None
             self._embedding = np.zeros((0, self.dimensions), dtype=np.float32)
             return
-        
+
         documents = [
             WeisfeilerLehmanHashing(
                 graph=graph,
@@ -86,10 +86,7 @@ class Graph2Vec:
             )
             for graph in graphs
         ]
-        documents = [
-            TaggedDocument(words=doc.get_graph_features(), tags=[str(i)])
-            for i, doc in enumerate(documents)
-        ]
+        documents = [TaggedDocument(words=doc.get_graph_features(), tags=[str(i)]) for i, doc in enumerate(documents)]
 
         # Check if any documents have words
         if all(len(doc.words) == 0 for doc in documents):
@@ -125,7 +122,7 @@ class Graph2Vec:
 
     def infer(self, graphs) -> np.array:
         """Infer the graph embeddings.
-    
+
         Arg types:
             * **graphs** *(List of NetworkX graphs)* - The graphs to be embedded.
 
@@ -134,7 +131,7 @@ class Graph2Vec:
         """
         if self.model is None:
             raise ValueError("Model has not been fitted yet. Call fit() first.")
-        
+
         self._set_seed()
         documents = [
             WeisfeilerLehmanHashing(
@@ -150,12 +147,11 @@ class Graph2Vec:
 
         embedding = np.array(
             [
-                self.model.infer_vector(
-                    doc, alpha=self.learning_rate, min_alpha=0.00001, epochs=self.epochs
-                )
+                self.model.infer_vector(doc, alpha=self.learning_rate, min_alpha=0.00001, epochs=self.epochs)
                 for doc in documents
             ]
         )
 
         return embedding
+
 

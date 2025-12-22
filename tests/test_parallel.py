@@ -4,21 +4,19 @@ Tests for parallel processing functionality.
 import pytest
 import networkx as nx
 import numpy as np
-from node2vec import Node2Vec
+from graph2emb import Node2Vec
 
 
 class TestParallelProcessing:
     """Test cases for parallel processing."""
     
-    def test_parallel_probability_precomputation(self):
+    def test_parallel_probability_precomputation(self, medium_graph):
         """Test that parallel probability precomputation produces same results as sequential."""
-        graph = nx.fast_gnp_random_graph(n=50, p=0.3, seed=42)
-        
         # Sequential processing
-        node2vec_seq = Node2Vec(graph, dimensions=16, walk_length=5, num_walks=2, workers=1, quiet=True)
+        node2vec_seq = Node2Vec(medium_graph, dimensions=8, walk_length=3, num_walks=1, workers=1, quiet=True, seed=42)
         
         # Parallel processing
-        node2vec_par = Node2Vec(graph, dimensions=16, walk_length=5, num_walks=2, workers=2, quiet=True)
+        node2vec_par = Node2Vec(medium_graph, dimensions=8, walk_length=3, num_walks=1, workers=2, quiet=True, seed=42)
         
         # Check that both produce walks
         assert len(node2vec_seq.walks) > 0
@@ -31,15 +29,13 @@ class TestParallelProcessing:
         # Both should have same number of nodes with probabilities
         assert len(node2vec_seq.d_graph) == len(node2vec_par.d_graph)
     
-    def test_parallel_walk_generation(self):
+    def test_parallel_walk_generation(self, medium_graph):
         """Test parallel walk generation."""
-        graph = nx.fast_gnp_random_graph(n=40, p=0.4, seed=42)
-        
         # Single worker
-        node2vec_single = Node2Vec(graph, dimensions=16, walk_length=5, num_walks=4, workers=1, quiet=True)
+        node2vec_single = Node2Vec(medium_graph, dimensions=8, walk_length=3, num_walks=2, workers=1, quiet=True, seed=42)
         
         # Multiple workers
-        node2vec_multi = Node2Vec(graph, dimensions=16, walk_length=5, num_walks=4, workers=2, quiet=True)
+        node2vec_multi = Node2Vec(medium_graph, dimensions=8, walk_length=3, num_walks=2, workers=2, quiet=True, seed=42)
         
         # Both should produce same number of walks
         assert len(node2vec_single.walks) == len(node2vec_multi.walks)
@@ -47,29 +43,26 @@ class TestParallelProcessing:
         # Check walk structure
         for walk in node2vec_multi.walks:
             assert isinstance(walk, list)
-            assert len(walk) <= 5
+            assert len(walk) <= 3
     
-    def test_workers_parameter(self):
+    def test_workers_parameter(self, small_graph):
         """Test different worker counts."""
-        graph = nx.fast_gnp_random_graph(n=30, p=0.4, seed=42)
-        
         for workers in [1, 2]:
             node2vec = Node2Vec(
-                graph, 
-                dimensions=16, 
-                walk_length=5, 
-                num_walks=2, 
+                small_graph,
+                dimensions=8,
+                walk_length=3,
+                num_walks=1,
                 workers=workers, 
-                quiet=True
+                quiet=True,
+                seed=42,
             )
             assert node2vec.workers == workers
             assert len(node2vec.walks) > 0
     
-    def test_parallel_probability_structure(self):
+    def test_parallel_probability_structure(self, small_graph):
         """Test that parallel processing maintains correct probability structure."""
-        graph = nx.fast_gnp_random_graph(n=30, p=0.4, seed=42)
-        
-        node2vec = Node2Vec(graph, dimensions=16, walk_length=5, num_walks=2, workers=2, quiet=True)
+        node2vec = Node2Vec(small_graph, dimensions=8, walk_length=3, num_walks=1, workers=2, quiet=True, seed=42)
         
         # Check probability structure
         for node, data in node2vec.d_graph.items():
@@ -85,15 +78,13 @@ class TestParallelProcessing:
                 assert np.isclose(first_travel.sum(), 1.0, atol=1e-6)
                 assert np.all(first_travel >= 0)
     
-    def test_sequential_vs_parallel_consistency(self):
+    def test_sequential_vs_parallel_consistency(self, small_graph):
         """Test that sequential and parallel processing produce consistent results."""
-        graph = nx.fast_gnp_random_graph(n=25, p=0.4, seed=42)
-        
         # Sequential
-        node2vec_seq = Node2Vec(graph, dimensions=16, walk_length=5, num_walks=2, workers=1, quiet=True, seed=123)
+        node2vec_seq = Node2Vec(small_graph, dimensions=8, walk_length=3, num_walks=1, workers=1, quiet=True, seed=123)
         
         # Parallel
-        node2vec_par = Node2Vec(graph, dimensions=16, walk_length=5, num_walks=2, workers=2, quiet=True, seed=123)
+        node2vec_par = Node2Vec(small_graph, dimensions=8, walk_length=3, num_walks=1, workers=2, quiet=True, seed=123)
         
         # Both should have same number of walks
         assert len(node2vec_seq.walks) == len(node2vec_par.walks)
