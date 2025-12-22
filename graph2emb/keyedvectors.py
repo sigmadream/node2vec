@@ -78,6 +78,26 @@ class KeyedVectors:
         idx = self.key_to_index[key]
         return self.vectors[idx].copy()
 
+    def get_vector(self, key: str, norm: bool = False) -> np.ndarray:
+        """
+        Get vector for a key (gensim-compatible API).
+
+        Args:
+            key: Key string.
+            norm: If True, return the L2-normalized vector.
+
+        Returns:
+            Numpy array of shape (vector_size,).
+        """
+        vec = self[key]
+        if not norm:
+            return vec
+
+        denom = float(np.linalg.norm(vec))
+        if denom == 0.0:
+            return vec
+        return vec / denom
+
     def __contains__(self, key: str) -> bool:
         """Check if key exists."""
         return key in self.key_to_index
